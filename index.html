@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Secured Quiz Competition - Endless Tie-Breaker</title>
+  <!-- Bootstrap 5 CSS -->
+  <link href="css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    body { background: #f1f5f9; font-family: Arial, sans-serif; }
+    .main-header { background: #123b66; color: white; padding: 25px 10px; text-align: center; }
+    .main-card { border: none; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+    .question-box { background: #e8f2ff; padding: 20px; border-radius: 12px; }
+    .choice-btn { width: 100%; text-align: left; margin-bottom: 10px; white-space: normal; }
+    .selected-choice { border: 3px solid #123b66; background: #e8f2ff; }
+    .correct-choice { background: #198754 !important; color: white !important; }
+    .wrong-choice { background: #dc3545 !important; color: white !important; }
+    .score-number { font-size: 25px; font-weight: bold; color: #123b66; }
+    #competitionArea, #resultArea, #tieBreakerArea { display: none; }
+    .used-number { background: #198754; color: white; border-radius: 5px; padding: 5px 8px; margin: 3px; display: inline-block; }
+    .remaining-number { background: #e2e8f0; color: #1e293b; border-radius: 5px; padding: 5px 8px; margin: 3px; display: inline-block; }
+    .timer-display { font-size: 24px; font-weight: bold; color: #dc3545; text-align: right; }
+  </style>
+</head>
+<body>
+
+  <header class="main-header">
+    <div class="container d-flex justify-content-between align-items-center">
+      <div>
+        <h1>🏆 Secured Quiz Competition</h1>
+        <p class="mb-0">100 Main Questions • Endless Tie-Breaker with Timer</p>
+      </div>
+      <div>
+        <button class="btn btn-outline-light btn-sm" onclick="exportToExcel()">📊 Export to Excel</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container py-4">
+
+    <!-- SETUP AREA -->
+    <section id="setupArea" class="card main-card p-4 mb-4">
+      <h2 class="h4 mb-3">Register Students & Configure Quiz</h2>
+
+      <div class="row mb-3">
+        <div class="col-md-6 mb-2">
+          <label for="studentCountInput" class="form-label fw-bold">How many students will participate?</label>
+          <input type="number" id="studentCountInput" class="form-control" min="1" max="20" value="5">
+        </div>
+        <div class="col-md-6 mb-2">
+          <label for="maxQuestionsInput" class="form-label fw-bold">Total questions to use in this round:</label>
+          <input type="number" id="maxQuestionsInput" class="form-control" min="1" max="100" value="100">
+          <small class="text-muted">Max available in database: <span id="totalDbQuestions">100</span></small>
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <button class="btn btn-secondary w-100" onclick="generateStudentInputs()">Set Registration Settings</button>
+      </div>
+
+      <hr>
+
+      <div id="studentInputsContainer" class="mb-3"></div>
+
+      <button class="btn btn-primary btn-lg w-100" onclick="startCompetition()">Start Competition</button>
+    </section>
+
+    <!-- COMPETITION AREA -->
+    <section id="competitionArea">
+      <div class="d-flex justify-content-between mb-3">
+        <button class="btn btn-outline-secondary" onclick="goBackToSetup()">⬅ Back to Registration</button>
+        <button class="btn btn-outline-success" onclick="exportToExcel()">📥 Export Progress to Excel</button>
+      </div>
+
+      <!-- CURRENT STUDENT -->
+      <div class="card main-card p-3 mb-4">
+        <label for="studentSelect" class="form-label fw-bold">Select the student who will answer</label>
+        <select id="studentSelect" class="form-select" onchange="updateCurrentStudent()"></select>
+        <p class="mt-3 mb-0">Current student: <strong id="currentStudent">Student 1</strong></p>
+      </div>
+
+      <!-- QUESTION NUMBER SELECTION -->
+      <div class="card main-card p-4 mb-4">
+        <h2 class="h4">Choose a Question Number</h2>
+        <div class="row g-2">
+          <div class="col-7">
+            <input type="number" id="questionNumber" class="form-control form-control-lg" min="1" placeholder="Enter number (1-100)">
+          </div>
+          <div class="col-5">
+            <button class="btn btn-primary btn-lg w-100" onclick="showQuestionSecured()">Show Question</button>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <strong>Used question numbers:</strong>
+          <div id="usedNumbers" class="mt-2" style="max-height: 100px; overflow-y: auto;"></div>
+        </div>
+
+        <div class="mt-3">
+          <strong>Remaining question numbers:</strong>
+          <div id="remainingNumbers" class="mt-2" style="max-height: 150px; overflow-y: auto;"></div>
+        </div>
+      </div>
+
+      <!-- QUESTION DISPLAY CARD -->
+      <div id="questionCard" class="card main-card p-4 mb-4" style="display:none;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <span id="questionCategory" class="badge text-bg-primary fs-6"></span>
+          <div id="timerDisplay" class="timer-display">⏱ 30s</div>
+        </div>
+
+        <div class="question-box mb-3">
+          <h2 id="questionTitle" class="h5"></h2>
+        </div>
+
+        <div id="answerChoices"></div>
+        <div id="feedback" class="mt-3 fw-bold" aria-live="polite"></div>
+
+        <button id="submitAnswerBtn" class="btn btn-success btn-lg w-100 mt-3" onclick="submitAnswer()">Submit Answer</button>
+        <button id="nextQuestionBtn" class="btn btn-primary btn-lg w-100 mt-2" onclick="prepareNextQuestion()" style="display:none;">Continue Competition</button>
+      </div>
+
+      <!-- SCOREBOARD -->
+      <div class="card main-card p-4 mb-4">
+        <h2 class="h4">📊 Scoreboard</h2>
+        <div class="table-responsive">
+          <table class="table table-striped align-middle">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Score</th>
+                <th>Answered</th>
+              </tr>
+            </thead>
+            <tbody id="scoreboard"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <button class="btn btn-danger w-100 mb-4" onclick="showFinalResultSecured()">Finish Competition & Show Winner</button>
+    </section>
+
+    <!-- TIE-BREAKER AREA -->
+    <section id="tieBreakerArea" class="card main-card p-4 mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h4 text-danger mb-0">⚡ Tie-Breaker Round (እኩል ነጥብ ማስተካከያ)</h2>
+        <div id="tieTimerDisplay" class="timer-display">⏱ 30s</div>
+      </div>
+
+      <p id="tieBreakerInfo" class="fs-5"></p>
+
+      <div class="card p-3 mb-3 border-warning">
+        <h4 id="tieQuestionTitle" class="h5"></h4>
+        <div id="tieAnswerChoices" class="mt-3"></div>
+        <div id="tieFeedback" class="mt-3 fw-bold"></div>
+      </div>
+
+      <button id="submitTieBtn" class="btn btn-success btn-lg w-100" onclick="submitTieAnswer()">Submit Tie-Breaker Answer</button>
+      <button id="nextTieBtn" class="btn btn-primary btn-lg w-100 mt-2" onclick="loadNextTieQuestion()" style="display:none;">Next Tie Question</button>
+    </section>
+
+    <!-- FINAL RESULT -->
+    <section id="resultArea" class="card main-card p-4 mb-4">
+      <h2 class="text-center">🏆 Final Results</h2>
+      <div id="winnerMessage" class="text-center fs-5 fw-bold my-3"></div>
+      <div id="finalScoreboard"></div>
+      
+      <div class="row g-2 mt-3">
+        <div class="col-md-6">
+          <button class="btn btn-success w-100" onclick="exportToExcel()">📥 Save Final Results to Excel</button>
+        </div>
+        <div class="col-md-6">
+          <button class="btn btn-danger w-100" onclick="resetAllSecured()">🔄 Start New Competition (Reset)</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+<script>
+  const ADMIN_PIN = "1234";
+  const QUESTION_TIME_LIMIT = 30;
+
+  // 1. 100 MAIN QUESTIONS DATABASE
+  const allQuestions = Array.from({ length: 100 }, (_, i) => {
+    const qNum = i + 1;
+    if (i === 0) return { category: "Information Technology", question: "What does CPU stand for?", options: ["Central Processing Unit", "Computer Personal Unit", "Central Program User", "Control Processing Utility"], answer: 0 };
+    if (i === 1) return { category: "Mathematics", question: "What is 12 × 8?", options: ["86", "96", "108", "88"], answer: 1 };
+    if (i === 2) return { category: "Science", question: "Which planet is known as the Red Planet?", options: ["Earth", "Venus", "Mars", "Jupiter"], answer: 2 };
+    if (i === 3) return { category: "English", question: "What is the plural of 'child'?", options: ["Childs", "Childes", "Children", "Childrens"], answer: 2 };
+    if (i === 4) return { category: "General Knowledge", question: "What is the capital city of Ethiopia?", options: ["Hawassa", "Addis Ababa", "Bahir Dar", "Mekelle"], answer: 1 };
+
+    const categories = ["Information Technology", "Mathematics", "Science", "General Knowledge", "Website Design"];
+    const cat = categories[i % categories.length];
+    return {
+      category: cat,
+      question: `Question ${qNum}: Sample competition question related to ${cat}?`,
+      options: [`Option A for Q${qNum}`, `Option B for Q${qNum} (Correct)`, `Option C for Q${qNum}`, `Option D for Q${qNum}`],
+      answer: 1
+    };
+  });
+
+  // 2. 20 TIE-BREAKER QUESTIONS POOL
+  const tieBreakerQuestions = Array.from({ length: 20 }, (_, i) => {
+    const tNum = i + 1;
+    if (i === 0) return { question: "Tie-Breaker 1: Which company created the Windows operating system?", options: ["Apple", "Microsoft", "Google", "IBM"], answer: 1 };
+    if (i === 1) return { question: "Tie-Breaker 2: What is the chemical symbol for Gold?", options: ["Ag", "Fe", "Au", "Cu"], answer: 2 };
+    if (i === 2) return { question: "Tie-Breaker 3: How many continents are there on Earth?", options: ["5", "6", "7", "8"], answer: 2 };
+
+    return {
+      question: `Tie-Breaker ${tNum}: Specialized tie-breaking challenge question ${tNum}?`,
+      options: [`Choice A`, `Choice B (Correct)`, `Choice C`, `Choice D`],
+      answer: 1
+    };
+  });
+
+  let activeQuestions = [];
+  let studentCount = 5;
+  let maxQuestionsCount = 100;
+  let students = [];
+  let scores = [];
+  let answeredCounts = [];
+  let usedQuestions = [];
+  let usedTieQuestions = [];
+  let currentQuestionIndex = null;
+  let selectedOption = null;
+  let answerSubmitted = false;
+
+  // Tie-Breaker State
+  let tiedStudentsIndices = [];
+  let currentTieStudentPointer = 0;
+  let currentTieQuestion = null;
+  let selectedTieOption = null;
+  let tieAnswerSubmitted = false;
+
+  let timeLeft = 30;
+  let timerInterval = null;
+
+  window.onload = function() {
+    document.getElementById("totalDbQuestions").textContent = allQuestions.length;
+    document.getElementById("maxQuestionsInput").value = allQuestions.length;
+    
+    if (localStorage.getItem("quiz_state_saved")) {
+      if (confirm("ያልተጠናቀቀ የውድድር ዳታ ተገኝቷል። ካቆሙበት መቀጠል ይፈልጋሉ?")) {
+        loadStateFromLocalStorage();
+        return;
+      }
+    }
+    generateStudentInputs();
+  };
+
+  function saveStateToLocalStorage() {
+    const state = {
+      studentCount,
+      maxQuestionsCount,
+      activeQuestionsLength: activeQuestions.length,
+      students,
+      scores,
+      answeredCounts,
+      usedQuestions,
+      currentStudentIndex: document.getElementById("studentSelect").value || 0
+    };
+    localStorage.setItem("quiz_state_data", JSON.stringify(state));
+    localStorage.setItem("quiz_state_saved", "true");
+  }
+
+  function loadStateFromLocalStorage() {
+    const saved = localStorage.getItem("quiz_state_data");
+    if (!saved) return;
+
+    const data = JSON.parse(saved);
+    studentCount = data.studentCount;
+    maxQuestionsCount = data.maxQuestionsCount;
+    activeQuestions = allQuestions.slice(0, maxQuestionsCount);
+    students = data.students;
+    scores = data.scores;
+    answeredCounts = data.answeredCounts;
+    usedQuestions = data.usedQuestions;
+
+    const select = document.getElementById("studentSelect");
+    select.innerHTML = "";
+    students.forEach((st, i) => {
+      const opt = document.createElement("option");
+      opt.value = i;
+      opt.textContent = st;
+      select.appendChild(opt);
+    });
+    select.value = data.currentStudentIndex || 0;
+
+    document.getElementById("setupArea").style.display = "none";
+    document.getElementById("competitionArea").style.display = "block";
+
+    updateCurrentStudent();
+    updateScoreboard();
+    updateQuestionNumbers();
+  }
+
+  function generateStudentInputs() {
+    const countInput = document.getElementById("studentCountInput");
+    const qCountInput = document.getElementById("maxQuestionsInput");
+    
+    let count = parseInt(countInput.value);
+    let qCount = parseInt(qCountInput.value);
+
+    if (isNaN(count) || count < 1) count = 1;
+    if (isNaN(qCount) || qCount < 1) qCount = 1;
+    if (qCount > allQuestions.length) qCount = allQuestions.length;
+
+    studentCount = count;
+    maxQuestionsCount = qCount;
+    qCountInput.value = maxQuestionsCount;
+
+    const container = document.getElementById("studentInputsContainer");
+    const existingValues = [];
+    container.querySelectorAll("input").forEach(input => existingValues.push(input.value));
+    container.innerHTML = "";
+
+    for (let i = 0; i < studentCount; i++) {
+      const div = document.createElement("div");
+      div.className = "mb-3";
+      const label = document.createElement("label");
+      label.className = "form-label";
+      label.textContent = "Student " + (i + 1);
+
+      const input = document.createElement("input");
+      input.id = "name" + i;
+      input.className = "form-control";
+      input.value = existingValues[i] || ("Student " + (i + 1));
+
+      div.appendChild(label);
+      div.appendChild(input);
+      container.appendChild(div);
+    }
+  }
+
+  function startCompetition() {
+    generateStudentInputs();
+    activeQuestions = allQuestions.slice(0, maxQuestionsCount);
+
+    students = [];
+    for (let i = 0; i < studentCount; i++) {
+      const inputEl = document.getElementById("name" + i);
+      const name = inputEl ? inputEl.value.trim() : "";
+      students.push(name || "Student " + (i + 1));
+    }
+
+    scores = new Array(studentCount).fill(0);
+    answeredCounts = new Array(studentCount).fill(0);
+    usedQuestions = [];
+
+    const select = document.getElementById("studentSelect");
+    select.innerHTML = "";
+    students.forEach((student, index) => {
+      const option = document.createElement("option");
+      option.value = index;
+      option.textContent = student;
+      select.appendChild(option);
+    });
+
+    document.getElementById("setupArea").style.display = "none";
+    document.getElementById("competitionArea").style.display = "block";
+
+    document.getElementById("questionNumber").setAttribute("max", activeQuestions.length);
+    document.getElementById("questionNumber").setAttribute("placeholder", `1–${activeQuestions.length}`);
+
+    updateCurrentStudent();
+    updateScoreboard();
+    updateQuestionNumbers();
+    saveStateToLocalStorage();
+  }
+
+  function goBackToSetup() {
+    const pwd = prompt("ወደ Setup ለመመለስ Admin Password (1234) ያስገቡ:");
+    if (pwd === ADMIN_PIN) {
+      if(timerInterval) clearInterval(timerInterval);
+      document.getElementById("competitionArea").style.display = "none";
+      document.getElementById("setupArea").style.display = "block";
+    } else if(pwd !== null) {
+      alert("የተሳሳተ ፒን ቁጥር!");
+    }
+  }
+
+  function updateCurrentStudent() {
+    const index = Number(document.getElementById("studentSelect").value);
+    document.getElementById("currentStudent").textContent = students[index] || "";
+    saveStateToLocalStorage();
+  }
+
+  function showQuestionSecured() {
+    const number = Number(document.getElementById("questionNumber").value);
+    if (!Number.isInteger(number) || number < 1 || number > activeQuestions.length) {
+      alert(`እባክዎ ከ 1 እስከ ${activeQuestions.length} ያለ ቁጥር ያስገቡ።`);
+      return;
+    }
+    showQuestion(number - 1);
+  }
+
+  function showQuestion(index) {
+    if (usedQuestions.includes(index)) {
+      alert("ይህ ጥያቄ ከዚህ በፊት ተጠቅሟል።");
+      return;
+    }
+
+    currentQuestionIndex = index;
+    selectedOption = null;
+    answerSubmitted = false;
+    const q = activeQuestions[index];
+
+    document.getElementById("questionCard").style.display = "block";
+    document.getElementById("questionCategory").textContent = "Question " + (index + 1) + " • " + q.category;
+    document.getElementById("questionTitle").textContent = q.question;
+    document.getElementById("feedback").textContent = "";
+    document.getElementById("submitAnswerBtn").style.display = "block";
+    document.getElementById("nextQuestionBtn").style.display = "none";
+
+    const choices = document.getElementById("answerChoices");
+    choices.innerHTML = "";
+
+    q.options.forEach((option, i) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn btn-outline-secondary choice-btn";
+      button.textContent = String.fromCharCode(65 + i) + ". " + option;
+
+      button.onclick = function () {
+        if (answerSubmitted) return;
+        selectedOption = i;
+        document.querySelectorAll(".choice-btn").forEach(btn => btn.classList.remove("selected-choice"));
+        button.classList.add("selected-choice");
+      };
+
+      choices.appendChild(button);
+    });
+
+    startTimer("timerDisplay", handleTimeOut);
+    document.getElementById("questionCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function startTimer(displayId, timeoutCallback) {
+    if (timerInterval) clearInterval(timerInterval);
+    timeLeft = QUESTION_TIME_LIMIT;
+    document.getElementById(displayId).textContent = `⏱ ${timeLeft}s`;
+
+    timerInterval = setInterval(() => {
+      timeLeft--;
+      document.getElementById(displayId).textContent = `⏱ ${timeLeft}s`;
+
+      if (timeLeft <= 0) {
+        clearInterval(timerInterval);
+        timeoutCallback();
+      }
+    }, 1000);
+  }
+
+  function handleTimeOut() {
+    if (answerSubmitted) return;
+    answerSubmitted = true;
+    if (timerInterval) clearInterval(timerInterval);
+
+    const studentIndex = Number(document.getElementById("studentSelect").value);
+    const q = activeQuestions[currentQuestionIndex];
+    const buttons = document.querySelectorAll(".choice-btn");
+
+    usedQuestions.push(currentQuestionIndex);
+    answeredCounts[studentIndex]++;
+
+    buttons.forEach((button, i) => {
+      button.disabled = true;
+      if (i === q.answer) button.classList.add("correct-choice");
+    });
+
+    const feedback = document.getElementById("feedback");
+    feedback.textContent = "⏰ ሰዓቱ አልቋል! ትክክለኛው መልስ: " + q.options[q.answer];
+    feedback.className = "mt-3 fw-bold text-danger";
+
+    document.getElementById("submitAnswerBtn").style.display = "none";
+    document.getElementById("nextQuestionBtn").style.display = "block";
+
+    updateScoreboard();
+    updateQuestionNumbers();
+    saveStateToLocalStorage();
+  }
+
+  function submitAnswer() {
+    if (currentQuestionIndex === null || answerSubmitted) return;
+    if (selectedOption === null) {
+      alert("እባክዎ መጀመሪያ መልስ ይምረጡ።");
+      return;
+    }
+
+    answerSubmitted = true;
+    if (timerInterval) clearInterval(timerInterval);
+
+    const studentIndex = Number(document.getElementById("studentSelect").value);
+    const q = activeQuestions[currentQuestionIndex];
+    const buttons = document.querySelectorAll(".choice-btn");
+
+    usedQuestions.push(currentQuestionIndex);
+    answeredCounts[studentIndex]++;
+
+    buttons.forEach((button, i) => {
+      button.disabled = true;
+      if (i === q.answer) button.classList.add("correct-choice");
+      if (i === selectedOption && selectedOption !== q.answer) button.classList.add("wrong-choice");
+    });
+
+    const feedback = document.getElementById("feedback");
+    if (selectedOption === q.answer) {
+      scores[studentIndex]++;
+      feedback.textContent = "✅ ትክክል! " + students[studentIndex] + " 1 ነጥብ አግኝቷል።";
+      feedback.className = "mt-3 fw-bold text-success";
+    } else {
+      feedback.textContent = "❌ ስህተት ነው። ትክክለኛው መልስ: " + q.options[q.answer];
+      feedback.className = "mt-3 fw-bold text-danger";
+    }
+
+    document.getElementById("submitAnswerBtn").style.display = "none";
+    document.getElementById("nextQuestionBtn").style.display = "block";
+
+    updateScoreboard();
+    updateQuestionNumbers();
+    saveStateToLocalStorage();
+  }
+
+  function prepareNextQuestion() {
+    if (timerInterval) clearInterval(timerInterval);
+    document.getElementById("questionCard").style.display = "none";
+    document.getElementById("questionNumber").value = "";
+
+    if (usedQuestions.length === activeQuestions.length) {
+      showFinalResultSecured();
+      return;
+    }
+
+    const select = document.getElementById("studentSelect");
+    const currentIndex = Number(select.value);
+    select.value = (currentIndex + 1) % students.length;
+
+    updateCurrentStudent();
+    currentQuestionIndex = null;
+    selectedOption = null;
+    answerSubmitted = false;
+  }
+
+  function updateQuestionNumbers() {
+    const usedContainer = document.getElementById("usedNumbers");
+    const remainingContainer = document.getElementById("remainingNumbers");
+    usedContainer.innerHTML = "";
+    remainingContainer.innerHTML = "";
+
+    usedQuestions.slice().sort((a, b) => a - b).forEach(index => {
+      const span = document.createElement("span");
+      span.className = "used-number";
+      span.textContent = index + 1;
+      usedContainer.appendChild(span);
+    });
+
+    activeQuestions.forEach((q, index) => {
+      if (!usedQuestions.includes(index)) {
+        const span = document.createElement("span");
+        span.className = "remaining-number";
+        span.textContent = index + 1;
+        remainingContainer.appendChild(span);
+      }
+    });
+
+    if (usedQuestions.length === 0) usedContainer.textContent = "None yet";
+    if (usedQuestions.length === activeQuestions.length) remainingContainer.textContent = "No questions remaining";
+  }
+
+  function updateScoreboard() {
+    const tbody = document.getElementById("scoreboard");
+    tbody.innerHTML = "";
+
+    students.forEach((student, index) => {
+      const row = document.createElement("tr");
+      row.innerHTML = `<td>${student}</td><td class="score-number">${scores[index]}</td><td>${answeredCounts[index]}</td>`;
+      tbody.appendChild(row);
+    });
+  }
+
+  function showFinalResultSecured() {
+    const pwd = prompt("ውድድሩን ጨርሶ አሸናፊውን ለማሳየት Admin Password (1234) ያስገቡ:");
+    if (pwd === ADMIN_PIN) {
+      checkTieAndShowResults();
+    } else if (pwd !== null) {
+      alert("የተሳሳተ ፒን ቁጥር!");
+    }
+  }
+
+  // ENDLESS TIE CHECKER & LOGIC
+  function checkTieAndShowResults() {
+    if (timerInterval) clearInterval(timerInterval);
+    document.getElementById("competitionArea").style.display = "none";
+
+    const highestScore = Math.max(...scores);
+    const winners = students.filter((_, index) => scores[index] === highestScore);
+
+    if (winners.length > 1) {
+      tiedStudentsIndices = students.map((_, idx) => scores[idx] === highestScore ? idx : -1).filter(idx => idx !== -1);
+      currentTieStudentPointer = 0;
+      usedTieQuestions = [];
+      startTieBreakerRound();
+    } else {
+      renderFinalScoreboardPage(winners);
+    }
+  }
+
+  function startTieBreakerRound() {
+    document.getElementById("tieBreakerArea").style.display = "block";
+    loadNextTieQuestion();
+  }
+
+  function loadNextTieQuestion() {
+    document.getElementById("nextTieBtn").style.display = "none";
+
+    // ጥያቄዎቹ አልቀው አሁንም እኩል ከሆኑ ከጅምሩ ቆጠራውን መልሶ እንዲጀምር ይደረጋል (Endless loop)
+    if (usedTieQuestions.length >= tieBreakerQuestions.length) {
+      usedTieQuestions = []; 
+    }
+
+    // በአንድ ዙር ለተሰጡት አቻ ተማሪዎች ጥያቄው አልቆ አሁንም አቻ ከሆኑ ዙሩን በድጋሚ በመፈተሽ አሸናፊ እስኪገኝ መቀጠል
+    const highestScore = Math.max(...scores);
+    const currentWinners = students.filter((_, index) => scores[index] === highestScore);
+    if (currentWinners.length === 1) {
+      document.getElementById("tieBreakerArea").style.display = "none";
+      renderFinalScoreboardPage(currentWinners);
+      return;
+    }
+
+    // አሁንም አቻ ከሆኑ ቀጣዩን ተማሪ መምረጥ
+    if (currentTieStudentPointer >= tiedStudentsIndices.length) {
+      // ዙሩ ሲያልቅ አሁንም አቻ ከሆኑ የሁሉንም አቻዎች ዝርዝር አዲስ በማድረግ ጥያቄውን እንቀጥላለን
+      tiedStudentsIndices = students.map((_, idx) => scores[idx] === highestScore ? idx : -1).filter(idx => idx !== -1);
+      currentTieStudentPointer = 0;
+    }
+
+    const currentStudentIdx = tiedStudentsIndices[currentTieStudentPointer];
+    document.getElementById("tieBreakerInfo").innerHTML = `እኩል ነጥብ ያወጡ ተማሪዎች ውድድር። አሁን ጥያቄ የሚመልሰው: <span class="text-danger fw-bold">${students[currentStudentIdx]}</span>`;
+
+    let availableIndices = tieBreakerQuestions.map((_, idx) => idx).filter(idx => !usedTieQuestions.includes(idx));
+    let randomIdx = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+    usedTieQuestions.push(randomIdx);
+
+    currentTieQuestion = tieBreakerQuestions[randomIdx];
+    document.getElementById("tieQuestionTitle").textContent = currentTieQuestion.question;
+    document.getElementById("tieFeedback").textContent = "";
+    document.getElementById("submitTieBtn").style.display = "block";
+
+    selectedTieOption = null;
+    tieAnswerSubmitted = false;
+    const choicesContainer = document.getElementById("tieAnswerChoices");
+    choicesContainer.innerHTML = "";
+
+    currentTieQuestion.options.forEach((opt, i) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-outline-secondary choice-btn";
+      btn.textContent = String.fromCharCode(65 + i) + ". " + opt;
+      btn.onclick = function() {
+        if(tieAnswerSubmitted) return;
+        selectedTieOption = i;
+        document.querySelectorAll("#tieAnswerChoices .choice-btn").forEach(b => b.classList.remove("selected-choice"));
+        btn.classList.add("selected-choice");
+      };
+      choicesContainer.appendChild(btn);
+    });
+
+    startTimer("tieTimerDisplay", handleTieTimeOut);
+  }
+
+  function handleTieTimeOut() {
+    if (tieAnswerSubmitted) return;
+    tieAnswerSubmitted = true;
+    if (timerInterval) clearInterval(timerInterval);
+
+    const buttons = document.querySelectorAll("#tieAnswerChoices .choice-btn");
+    buttons.forEach((btn, i) => {
+      btn.disabled = true;
+      if (i === currentTieQuestion.answer) btn.classList.add("correct-choice");
+    });
+
+    const feedback = document.getElementById("tieFeedback");
+    feedback.textContent = `⏰ ሰዓቱ አልቋል! ትክክለኛው መልስ: ${currentTieQuestion.options[currentTieQuestion.answer]}`;
+    feedback.className = "mt-3 fw-bold text-danger";
+
+    document.getElementById("submitTieBtn").style.display = "none";
+    document.getElementById("nextTieBtn").style.display = "block";
+
+    currentTieStudentPointer++;
+  }
+
+  function submitTieAnswer() {
+    if (tieAnswerSubmitted) return;
+    if (selectedTieOption === null) {
+      alert("እባክዎ መልስ ይምረጡ።");
+      return;
+    }
+
+    tieAnswerSubmitted = true;
+    if (timerInterval) clearInterval(timerInterval);
+
+    const currentStudentIdx = tiedStudentsIndices[currentTieStudentPointer];
+    const buttons = document.querySelectorAll("#tieAnswerChoices .choice-btn");
+    
+    buttons.forEach((btn, i) => {
+      btn.disabled = true;
+      if (i === currentTieQuestion.answer) btn.classList.add("correct-choice");
+      if (i === selectedTieOption && selectedTieOption !== currentTieQuestion.answer) btn.classList.add("wrong-choice");
+    });
+
+    const feedback = document.getElementById("tieFeedback");
+    if (selectedTieOption === currentTieQuestion.answer) {
+      scores[currentStudentIdx] += 1; // ትክክል ሲመልስ ሙሉ ነጥብ በመጨመር አቻነቱን እንዲሰብር ይደረጋል
+      feedback.textContent = `✅ ትክክል! ${students[currentStudentIdx]} 1 ነጥብ አግኝቷል።`;
+      feedback.className = "mt-3 fw-bold text-success";
+    } else {
+      feedback.textContent = `❌ ስህተት ነው። ትክክለኛው መልስ: ${currentTieQuestion.options[currentTieQuestion.answer]}`;
+      feedback.className = "mt-3 fw-bold text-danger";
+    }
+
+    document.getElementById("submitTieBtn").style.display = "none";
+    document.getElementById("nextTieBtn").style.display = "block";
+
+    currentTieStudentPointer++;
+  }
+
+  function renderFinalScoreboardPage(winners) {
+    document.getElementById("resultArea").style.display = "block";
+    const winnerMessage = document.getElementById("winnerMessage");
+
+    if (winners.length === 1) {
+      winnerMessage.textContent = "🏆 አሸናፊ: " + winners[0] + "!";
+    } else {
+      winnerMessage.textContent = "🤝 አሁንም እኩል ወጥተዋል: " + winners.join(", ");
+    }
+
+    const result = document.getElementById("finalScoreboard");
+    result.innerHTML = "";
+
+    const table = document.createElement("table");
+    table.className = "table table-striped";
+    table.innerHTML = "<thead><tr><th>Rank</th><th>Student</th><th>Score</th><th>Answered</th></tr></thead>";
+
+    const tbody = document.createElement("tbody");
+    const order = students.map((student, index) => ({ student, score: scores[index], answered: answeredCounts[index] }));
+    order.sort((a, b) => b.score - a.score);
+
+    let rank = 1;
+    order.forEach((item, index) => {
+      if (index > 0 && item.score !== order[index - 1].score) rank = index + 1;
+      const row = document.createElement("tr");
+      row.innerHTML = `<td>${rank}</td><td>${item.student}</td><td>${item.score}</td><td>${item.answered}</td>`;
+      tbody.appendChild(row);
+    });
+
+    table.appendChild(tbody);
+    result.appendChild(table);
+    saveStateToLocalStorage();
+  }
+
+  function exportToExcel() {
+    let csvContent = "data:text/csv;charset=utf-8,Student Name,Score,Questions Answered\n";
+    students.forEach((student, i) => {
+      csvContent += `"${student}",${scores[i]},${answeredCounts[i]}\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `quiz_results_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function resetAllSecured() {
+    const password = prompt("ዳታውን ሙሉ በሙሉ ለማጥፋት Admin Password (1234) ያስገቡ:");
+    if (password === ADMIN_PIN) {
+      localStorage.removeItem("quiz_state_data");
+      localStorage.removeItem("quiz_state_saved");
+      scores = [];
+      answeredCounts = [];
+      usedQuestions = [];
+      document.getElementById("resultArea").style.display = "none";
+      document.getElementById("setupArea").style.display = "block";
+      alert("ዳታው በስኬት ተሰርዟል! አዲስ ውድድር መጀመር ይችላሉ።");
+    } else if (password !== null) {
+      alert("የተሳሳተ የይለፍ ቃል ነው!");
+    }
+  }
+</script>
+</body>
+</html>
